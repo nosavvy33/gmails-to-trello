@@ -28,8 +28,9 @@ const CREDENTIALS_PATH = path.join(process.cwd(), 'credentials.json');
 const readFileAsync = promisify(fs.readFile);
 const writeFileAsync = promisify(fs.writeFile);
 
-const TRELLO_API_KEY = '';
+const TRELLO_API_KEY = config.match(/TRELLO_API_KEY=(.*)/)[1];;
 const TRELLO_TOKEN = config.match(/TRELLO_TOKEN=(.*)/)[1];
+const EMAILS_TO_TRELLO_CADENCE = config.match(/EMAILS_TO_TRELLO_CADENCE=(.*)/)[1];
 var TRELLO_LIST_ID = "";
 
 /**
@@ -115,7 +116,9 @@ async function authorize() {
 
 async function listMessages(auth) {
     const gmail = google.gmail({ version: 'v1', auth });
-    const messages = await gmail.users.messages.list({ userId: 'me', maxResults: 20, q: "newer_than:${EMAILS_FROM_LAST_HOURS}h" });
+    let emailsFromLastHours = `newer_than:${EMAILS_FROM_X_LAST_HOURS}h`;
+    // const messages = await gmail.users.messages.list({ userId: 'me', maxResults: 20, q: emailsFromLastHours });
+    const messages = await gmail.users.messages.list({ userId: 'me', q: emailsFromLastHours });
     if (messages.data && messages.data.messages) {
         return messages.data.messages;
     } else {
@@ -131,7 +134,9 @@ async function getMessage(auth, messageId) {
 }
 
 async function main() {
+    console.log("about to authenticate");
     const auth = await authorize();
+    console.log("about to get messages");
     const messages = await listMessages(auth);
     console.log(messages)
     for (const message of messages) {
@@ -139,7 +144,7 @@ async function main() {
         const headers = email.payload.headers;
         const subject = headers.find(header => header.name === 'Subject').value;
         const snippet = email.snippet;
-        console.log(subject, snippet);
+        console.log(subject, snippet.substring(0, 20));
         await createNewCard(subject, snippet);
     }
     console.log(`Dumped ${messages.length} emails to emails.csv at ${DateTime.now().toLocaleString(DateTime.DATETIME_FULL)}.`);
@@ -213,6 +218,15 @@ function getListIdByName() {
     });
 }
 
+function envPrint() {
+    console.log("TRELLO BOARD ", TRELLO_BOARD_ID);
+    console.log("TRELLO_API_KEY ", TRELLO_API_KEY);
+    console.log("TRELLO TRELLO_LIST_ID ", TRELLO_LIST_ID);
+    console.log("TRELLO_LIST_NAME ", TRELLO_LIST_NAME);
+    console.log("TRELLO_TOKEN ", TRELLO_TOKEN);
+
+
+}
 
 // setInterval(createNewCard, 60 * 60 * 1000); // Run every hour
 
@@ -224,7 +238,13 @@ getListIdByName()
     .catch((err) => {
         console.error(err);
     });
-setInterval(main, EMAILS_FROM_X_LAST_HOURS * 60 * 60 * 1000);
+
+envPrint();
+// setInterval(main, EMAILS_FROM_X_LAST_HOURS * 60 * 60 * 1000);
+
+main()
+setInterval(main, EMAILS_TO_TRELLO_CADENCE * 60 * 60 * 1000);
+
 //check why async is not working https://stackoverflow.com/questions/70383779/read-and-write-files-from-fs-not-working-asynchronously
 //Write logs to console https://stackoverflow.com/questions/8393636/configure-node-js-to-log-to-a-file-instead-of-the-console
 //pkg main.js --targets node16-win-x64
