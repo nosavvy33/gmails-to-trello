@@ -2,8 +2,10 @@ const path = require('path');
 const process = require('process');
 const { authenticate } = require('@google-cloud/local-auth');
 const { google } = require('googleapis');
-const { DateTime } = require('luxon');
 const https = require('https');
+const winston = require('winston');
+const { createLogger, format } = require('winston');
+const { combine, timestamp, label, printf } = format;
 
 const fs = require('fs');
 
@@ -25,6 +27,24 @@ const TRELLO_TOKEN = config.match(/TRELLO_TOKEN=(.*)/)[1];
 const EMAILS_TO_TRELLO_CADENCE = config.match(/EMAILS_TO_TRELLO_CADENCE=(.*)/)[1];
 var TRELLO_LIST_ID = "";
 
+// Define log formats
+const consoleFormat = printf(({ level, message, label, timestamp }) => {
+    return `${timestamp} [${label}] ${level}: ${message}`;
+});
+
+// Set up the logger
+const logger = createLogger({
+    format: combine(
+        label({ label: 'GMAILTOTRELLO' }),
+        timestamp(),
+        consoleFormat
+    ),
+    transports: [
+        new winston.transports.Console({ level: 'info' }),
+        new winston.transports.File({ filename: 'log.txt', level: 'debug' }),
+    ],
+});
+
 /**
  * Reads previously authorized credentials from the save file.
  *
@@ -36,7 +56,7 @@ async function loadSavedCredentialsIfExist() {
         const credentials = JSON.parse(content);
         return google.auth.fromJSON(credentials);
     } catch (err) {
-        console.log("no loaded credentials");
+        logger.info("No loaded credentials");
         return null;
     }
 }
@@ -66,17 +86,17 @@ async function saveCredentials(client) {
  */
 async function authorize() {
     let client = await loadSavedCredentialsIfExist();
-    console.log("client loaded", client);
+    logger.info(`Client loaded ${client}`);
     if (client) {
         return client;
     }
-    console.log("about to authenticat with credentials path", CREDENTIALS_PATH);
+    logger.info(`About to authenticate with credentials path ${CREDENTIALS_PATH}`);
     client = await authenticate({
         scopes: SCOPES,
         keyfilePath: CREDENTIALS_PATH,
     });
     if (client.credentials) {
-        console.log("authenticated w creds", client.credentials);
+        logger.info(`Authenticated with credentials ${client.credentials}`);
         await saveCredentials(client);
     }
     return client;
@@ -92,7 +112,7 @@ async function listMessages(auth) {
     if (messages.data && messages.data.messages) {
         return messages.data.messages;
     } else {
-        console.log('No messages found.');
+        logger.info('No messages found');
         return [];
     }
 }
@@ -104,20 +124,23 @@ async function getMessage(auth, messageId) {
 }
 
 async function main() {
-    console.log("about to authenticate");
+    logger.info("About to authenticate");
     const auth = await authorize();
-    console.log("about to get messages");
+
+    logger.info("About to get messages");
     const messages = await listMessages(auth);
-    console.log(messages)
+
+    logger.info(`Found ${messages.length} messages`)
+
     for (const message of messages) {
         const email = await getMessage(auth, message.id);
         const headers = email.payload.headers;
         const subject = headers.find(header => header.name === 'Subject').value;
         const snippet = email.snippet;
-        console.log(subject, snippet.substring(0, 20));
+
+        logger.info(`About to create card with subject chunk ${subject.substring(0, 20)}, and snippet chunk ${snippet.substring(0, 20)}`);
         await createNewCard(subject, snippet);
     }
-    console.log(`Dumped ${messages.length} emails to emails.csv at ${DateTime.now().toLocaleString(DateTime.DATETIME_FULL)}.`);
 }
 
 async function createNewCard(subject, snippet) {
@@ -189,13 +212,11 @@ function getListIdByName() {
 }
 
 function envPrint() {
-    console.log("TRELLO BOARD ", TRELLO_BOARD_ID);
-    console.log("TRELLO_API_KEY ", TRELLO_API_KEY);
-    console.log("TRELLO TRELLO_LIST_ID ", TRELLO_LIST_ID);
-    console.log("TRELLO_LIST_NAME ", TRELLO_LIST_NAME);
-    console.log("TRELLO_TOKEN ", TRELLO_TOKEN);
-
-
+    logger.debug(`TRELLO BOARD ${TRELLO_BOARD_ID}`);
+    logger.debug(`TRELLO_API_KEY ${TRELLO_API_KEY}`);
+    logger.debug(`TRELLO TRELLO_LIST_ID ${TRELLO_LIST_ID}`);
+    logger.debug(`TRELLO_LIST_NAME ${TRELLO_LIST_NAME}`);
+    logger.debug(`TRELLO_TOKEN ${TRELLO_TOKEN}`);
 }
 
 // setInterval(createNewCard, 60 * 60 * 1000); // Run every hour
@@ -203,17 +224,17 @@ function envPrint() {
 getListIdByName()
     .then((listId) => {
         TRELLO_LIST_ID = listId;
-        console.log(`List ID: ${listId}`);
+        logger.debug(`List ID: ${listId}`);
     })
     .catch((err) => {
-        console.error(err);
+        logger.error(err);
     });
 
 envPrint();
 // setInterval(main, EMAILS_FROM_X_LAST_HOURS * 60 * 60 * 1000);
 
-await main()
-setInterval(await main, EMAILS_TO_TRELLO_CADENCE * 60 * 60 * 1000);
+main()
+setInterval(main, EMAILS_TO_TRELLO_CADENCE * 60 * 60 * 1000);
 
 //check why async is not working https://stackoverflow.com/questions/70383779/read-and-write-files-from-fs-not-working-asynchronously
 //Write logs to console https://stackoverflow.com/questions/8393636/configure-node-js-to-log-to-a-file-instead-of-the-console
@@ -222,8 +243,8 @@ setInterval(await main, EMAILS_TO_TRELLO_CADENCE * 60 * 60 * 1000);
 process.on('uncaughtException', UncaughtExceptionHandler);
 
 function UncaughtExceptionHandler(err) {
-    console.log("Uncaught Exception Encountered!!");
-    console.log("err: ", err);
-    console.log("Stack trace: ", err.stack);
+    logger.error("Uncaught Exception Encountered!");
+    logger.error(`err: ${err}`);
+    logger.error(`Stack trace: ${err.stack}`);
     setInterval(function () { }, 1000);
 }
