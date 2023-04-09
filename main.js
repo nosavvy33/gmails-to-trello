@@ -1,15 +1,9 @@
-// const fs = require('fs').promises;
 const path = require('path');
 const process = require('process');
 const { authenticate } = require('@google-cloud/local-auth');
 const { google } = require('googleapis');
-const readline = require('readline');
-const { promisify } = require('util');
 const { DateTime } = require('luxon');
-const csvWriter = require('csv-write-stream');
-// const fetch = require('node-fetch');
 const https = require('https');
-const querystring = require('querystring');
 
 const fs = require('fs');
 
@@ -25,8 +19,6 @@ const SCOPES = ['https://www.googleapis.com/auth/gmail.readonly'];
 // time.
 const TOKEN_PATH = path.join(process.cwd(), 'token.json');
 const CREDENTIALS_PATH = path.join(process.cwd(), 'credentials.json');
-const readFileAsync = promisify(fs.readFile);
-const writeFileAsync = promisify(fs.writeFile);
 
 const TRELLO_API_KEY = config.match(/TRELLO_API_KEY=(.*)/)[1];;
 const TRELLO_TOKEN = config.match(/TRELLO_TOKEN=(.*)/)[1];
@@ -89,28 +81,6 @@ async function authorize() {
     }
     return client;
 }
-
-/**
- * Lists the names and IDs of up to 10 files.
- * @param {OAuth2Client} authClient An authorized OAuth2 client.
- */
-// async function listFiles(authClient) {
-//     const drive = google.drive({ version: 'v3', auth: authClient });
-//     const res = await drive.files.list({
-//         pageSize: 10,
-//         fields: 'nextPageToken, files(id, name)',
-//     });
-//     const files = res.data.files;
-//     if (files.length === 0) {
-//         console.log('No files found.');
-//         return;
-//     }
-
-//     console.log('Files:');
-//     files.map((file) => {
-//         console.log(`${file.name} (${file.id})`);
-//     });
-// }
 
 // authorize().then(listFiles).catch(console.error);
 
@@ -242,8 +212,8 @@ getListIdByName()
 envPrint();
 // setInterval(main, EMAILS_FROM_X_LAST_HOURS * 60 * 60 * 1000);
 
-main()
-setInterval(main, EMAILS_TO_TRELLO_CADENCE * 60 * 60 * 1000);
+await main()
+setInterval(await main, EMAILS_TO_TRELLO_CADENCE * 60 * 60 * 1000);
 
 //check why async is not working https://stackoverflow.com/questions/70383779/read-and-write-files-from-fs-not-working-asynchronously
 //Write logs to console https://stackoverflow.com/questions/8393636/configure-node-js-to-log-to-a-file-instead-of-the-console
