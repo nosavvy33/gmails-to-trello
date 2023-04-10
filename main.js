@@ -6,13 +6,16 @@ const https = require('https');
 const winston = require('winston');
 const { createLogger, format } = require('winston');
 const { combine, timestamp, label, printf } = format;
-
 const fs = require('fs');
 
 const config = fs.readFileSync('config.txt', 'utf-8');
 const TRELLO_BOARD_ID = config.match(/TRELLO_BOARD_ID=(.*)/)[1];
 const TRELLO_LIST_NAME = config.match(/TRELLO_TARGET_LISTNAME=(.*)/)[1];
 const EMAILS_FROM_X_LAST_HOURS = config.match(/EMAILS_FROM_X_LAST_HOURS=(.*)/)[1];
+const TRELLO_API_KEY = config.match(/TRELLO_API_KEY=(.*)/)[1];;
+const TRELLO_TOKEN = config.match(/TRELLO_TOKEN=(.*)/)[1];
+const EMAILS_TO_TRELLO_CADENCE = config.match(/EMAILS_TO_TRELLO_CADENCE=(.*)/)[1];
+var TRELLO_LIST_ID = "";
 
 // If modifying these scopes, delete token.json.
 const SCOPES = ['https://www.googleapis.com/auth/gmail.readonly'];
@@ -22,13 +25,8 @@ const SCOPES = ['https://www.googleapis.com/auth/gmail.readonly'];
 const TOKEN_PATH = path.join(process.cwd(), 'token.json');
 const CREDENTIALS_PATH = path.join(process.cwd(), 'credentials.json');
 
-const TRELLO_API_KEY = config.match(/TRELLO_API_KEY=(.*)/)[1];;
-const TRELLO_TOKEN = config.match(/TRELLO_TOKEN=(.*)/)[1];
-const EMAILS_TO_TRELLO_CADENCE = config.match(/EMAILS_TO_TRELLO_CADENCE=(.*)/)[1];
-var TRELLO_LIST_ID = "";
-
 // Define log formats
-const consoleFormat = printf(({ level, message, label, timestamp }) => {
+const loggerFormat = printf(({ level, message, label, timestamp }) => {
     return `${timestamp} [${label}] ${level}: ${message}`;
 });
 
@@ -37,7 +35,7 @@ const logger = createLogger({
     format: combine(
         label({ label: 'GMAILTOTRELLO' }),
         timestamp(),
-        consoleFormat
+        loggerFormat
     ),
     transports: [
         new winston.transports.Console({ level: 'info' }),
@@ -102,12 +100,9 @@ async function authorize() {
     return client;
 }
 
-// authorize().then(listFiles).catch(console.error);
-
 async function listMessages(auth) {
     const gmail = google.gmail({ version: 'v1', auth });
-    let emailsFromLastHours = `newer_than:${EMAILS_FROM_X_LAST_HOURS}h`;
-    // const messages = await gmail.users.messages.list({ userId: 'me', maxResults: 20, q: emailsFromLastHours });
+    const emailsFromLastHours = `newer_than:${EMAILS_FROM_X_LAST_HOURS}h`;
     const messages = await gmail.users.messages.list({ userId: 'me', q: emailsFromLastHours });
     if (messages.data && messages.data.messages) {
         return messages.data.messages;
@@ -123,28 +118,7 @@ async function getMessage(auth, messageId) {
     return message.data;
 }
 
-async function main() {
-    logger.info("About to authenticate");
-    const auth = await authorize();
-
-    logger.info("About to get messages");
-    const messages = await listMessages(auth);
-
-    logger.info(`Found ${messages.length} messages`)
-
-    for (const message of messages) {
-        const email = await getMessage(auth, message.id);
-        const headers = email.payload.headers;
-        const subject = headers.find(header => header.name === 'Subject').value;
-        const snippet = email.snippet;
-
-        logger.info(`About to create card with subject chunk ${subject.substring(0, 20)}, and snippet chunk ${snippet.substring(0, 20)}`);
-        await createNewCard(subject, snippet);
-    }
-}
-
 async function createNewCard(subject, snippet) {
-
     const options = {
         hostname: 'api.trello.com',
         path: `/1/cards?idList=${TRELLO_LIST_ID}&key=${TRELLO_API_KEY}&token=${TRELLO_TOKEN}&name=${encodeURIComponent(subject)}&desc=${encodeURIComponent(snippet)}`,
@@ -173,8 +147,7 @@ async function createNewCard(subject, snippet) {
     });
 }
 
-
-function getListIdByName() {
+async function getListIdByName() {
     const options = {
         hostname: 'api.trello.com',
         path: `/1/boards/${TRELLO_BOARD_ID}/lists?key=${TRELLO_API_KEY}&token=${TRELLO_TOKEN}`,
@@ -219,7 +192,25 @@ function envPrint() {
     logger.debug(`TRELLO_TOKEN ${TRELLO_TOKEN}`);
 }
 
-// setInterval(createNewCard, 60 * 60 * 1000); // Run every hour
+async function main() {
+    logger.info("About to authenticate");
+    const auth = await authorize();
+
+    logger.info("About to get messages");
+    const messages = await listMessages(auth);
+
+    logger.info(`Found ${messages.length} messages`)
+
+    for (const message of messages) {
+        const email = await getMessage(auth, message.id);
+        const headers = email.payload.headers;
+        const subject = headers.find(header => header.name === 'Subject').value;
+        const snippet = email.snippet;
+
+        logger.info(`About to create card with subject chunk ${subject.substring(0, 20)}, and snippet chunk ${snippet.substring(0, 20)}`);
+        await createNewCard(subject, snippet);
+    }
+}
 
 getListIdByName()
     .then((listId) => {
@@ -230,8 +221,6 @@ getListIdByName()
         logger.error(err);
     });
 
-envPrint();
-// setInterval(main, EMAILS_FROM_X_LAST_HOURS * 60 * 60 * 1000);
 
 main()
 setInterval(main, EMAILS_TO_TRELLO_CADENCE * 60 * 60 * 1000);
