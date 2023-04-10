@@ -16,6 +16,7 @@ const TRELLO_API_KEY = config.match(/TRELLO_API_KEY=(.*)/)[1];;
 const TRELLO_TOKEN = config.match(/TRELLO_TOKEN=(.*)/)[1];
 const EMAILS_TO_TRELLO_CADENCE = config.match(/EMAILS_TO_TRELLO_CADENCE=(.*)/)[1];
 var TRELLO_LIST_ID = "";
+var cardsTitles = [];
 
 // If modifying these scopes, delete token.json.
 const SCOPES = ['https://www.googleapis.com/auth/gmail.readonly'];
@@ -184,6 +185,39 @@ async function getListIdByName() {
     });
 }
 
+async function getCardsFromList() {
+    return new Promise((resolve, reject) => {
+        const options = {
+            hostname: 'api.trello.com',
+            path: `/1/boards/${TRELLO_BOARD_ID}/cards?list=${TRELLO_LIST_ID}&key=${TRELLO_API_KEY}&token=${TRELLO_TOKEN}`,
+            method: 'GET'
+        };
+
+        const req = https.request(options, (res) => {
+            let data = '';
+            res.on('data', (chunk) => {
+                data += chunk;
+            });
+            res.on('end', () => {
+                const cards = JSON.parse(data);
+                cardsTitles = cards.map((card) => card.name);
+                resolve(cardsTitles);
+            });
+        });
+
+        req.on('error', (error) => {
+            reject(error);
+        });
+
+        req.end();
+    });
+}
+
+function preventDuplicatedCards(title) {
+    return cardsTitles.includes(title);
+}
+
+
 function envPrint() {
     logger.debug(`TRELLO BOARD ${TRELLO_BOARD_ID}`);
     logger.debug(`TRELLO_API_KEY ${TRELLO_API_KEY}`);
@@ -201,11 +235,18 @@ async function main() {
 
     logger.info(`Found ${messages.length} messages`)
 
+    await getCardsFromList();
+
     for (const message of messages) {
         const email = await getMessage(auth, message.id);
         const headers = email.payload.headers;
         const subject = headers.find(header => header.name === 'Subject').value;
         const snippet = email.snippet;
+
+        if (preventDuplicatedCards(subject)) {
+            logger.warn(`Found duplicate for subject ${subject}, skipping...`);
+            return;
+        }
 
         logger.info(`About to create card with subject chunk ${subject.substring(0, 20)}, and snippet chunk ${snippet.substring(0, 20)}`);
         await createNewCard(subject, snippet);
@@ -221,6 +262,7 @@ getListIdByName()
         logger.error(err);
     });
 
+envPrint();
 
 main()
 setInterval(main, EMAILS_TO_TRELLO_CADENCE * 60 * 60 * 1000);
