@@ -227,7 +227,6 @@ setInterval(main, EMAILS_TO_TRELLO_CADENCE * 60 * 60 * 1000);
 
 //check why async is not working https://stackoverflow.com/questions/70383779/read-and-write-files-from-fs-not-working-asynchronously
 //Write logs to console https://stackoverflow.com/questions/8393636/configure-node-js-to-log-to-a-file-instead-of-the-console
-//pkg main.js --targets node16-win-x64
 
 process.on('uncaughtException', UncaughtExceptionHandler);
 
