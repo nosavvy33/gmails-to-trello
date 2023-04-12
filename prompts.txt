@@ -1,0 +1,8 @@
+1. Write a node js script for retrieving all emails from a Gmail account every hour and dump it to a CSV format, including email subject and email body snippet 
+2. Integrate this csv file to the Trello API, where Subject column is card title and Snippet column is card body
+3. make Trello list id retrieved from a config txt in format TRELLO_LISTID=
+4. from the Trello API, get the id of a list given the board id and that matches a given list name
+5. in the listMessages(auth) function retrieve only the emails from the last hour
+6. add a logger to log to console and to a file to the script
+7. for console have logger to log at info level, and for the logs.txt should be of debug level
+8. write a promise with https to get all cards from given list from given board
