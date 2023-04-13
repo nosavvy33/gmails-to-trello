@@ -92,7 +92,11 @@ Q: when granting access to the gmail account, I'm shown a message Access denied:
 
 A: this means logging user has not been added to the cloud console app's consent auth screen, refer to the GMAIL SETUP section
 
-  
+
+### Build
+
+Included, pkg module, so can run for windows `pkg main.js --targets node16-win-x64` or run npm run build since it's already available as command in package.json
+
 
 --------
 
