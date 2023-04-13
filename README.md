@@ -96,4 +96,4 @@ A: this means logging user has not been added to the cloud console app's consent
 
 --------
 
-*This repo was written with the help of ChatGPT, prompts in prompts.txt*
+*This repo was written with the help of ChatGPT, prompts in prompts.txt; wrote as well an article about how I came to do this here: https://medium.com/p/838529d9990b/edit*
